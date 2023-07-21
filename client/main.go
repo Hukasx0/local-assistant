@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"encoding/json"
+	// pacman -S mplayer
+	"github.com/hegedustibor/htgo-tts"
 )
 
 type PromptResponse struct {
@@ -82,5 +84,6 @@ func main() {
 		return
 	}
 
-	fmt.Println("", promptStruct.Text)
+	speech := htgotts.Speech{Folder: "audio", Language: "en"}
+    speech.Speak(promptStruct.Text)
 }

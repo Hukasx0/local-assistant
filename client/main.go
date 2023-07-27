@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"flag"
+	"os/exec"
 	"bytes"
 	"io/ioutil"
 	"net/http"
@@ -26,7 +27,31 @@ func main() {
 	server := flag.String("a", "http://localhost", "address of the backend server")
 	flag.Parse()
 
-	filePath := "test/audio.wav"
+	args := []string{
+		"-f", "alsa",
+		"-i", "default",
+		"-t", "5",
+		"-ar", "16000",
+		"-ac", "2",
+		"-sample_fmt", "s16",
+		"-y",
+		"/tmp/out.wav",
+		// records 5 second audio
+		// 16bit 16khz wav stereo saved in /tmp folder, with overwriting existing file
+		// you need to have ffmpeg to make this work
+		// sudo pacman -S ffmpeg
+	}
+
+	cmd := exec.Command("ffmpeg", args...)
+	output, err_f := cmd.CombinedOutput()
+	if err_f != nil {
+		fmt.Println("Error while running ffmpeg:", err_f)
+		fmt.Println("Error log:")
+		fmt.Println(string(output))
+		return
+	}
+
+	filePath := "/tmp/out.wav"
 	audioData, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		fmt.Println("Error while reading audio file: ", err)
@@ -84,6 +109,6 @@ func main() {
 		return
 	}
 
-	speech := htgotts.Speech{Folder: "audio", Language: "en"}
+	speech := htgotts.Speech{Folder: "test", Language: "en"}
     speech.Speak(promptStruct.Text)
 }

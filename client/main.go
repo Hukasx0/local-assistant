@@ -3,14 +3,17 @@ package main
 import (
 	"fmt"
 	"flag"
+	"os"
 	"os/exec"
 	"bytes"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"encoding/json"
 	"strings"
+	"regexp"
+	"net/url"
 	// pacman -S mplayer
-	"github.com/hegedustibor/htgo-tts"
 )
 
 type PromptResponse struct {
@@ -71,6 +74,38 @@ func get_voice_transcript(server *string, seconds string, filePath string) strin
 	return string(responseBody)
 }
 
+func tts(text string) {
+	text = url.QueryEscape(text)
+	resp, err := http.Get("http://localhost:5002/api/tts?text="+text)
+	if err != nil {
+		fmt.Println("Error while doing GET request:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("Wrong status code, error: ", resp.Status)
+		return
+	}
+	file, err := os.Create("/tmp/play.wav")
+	if err != nil {
+		fmt.Println("Error while creating a file: ", err)
+		return
+	}
+	defer file.Close()
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		fmt.Println("Error while writing to file", err)
+		return
+	}
+	cmd := exec.Command("xdg-open", "/tmp/play.wav")
+	err = cmd.Run()
+	if err != nil {
+		fmt.Println("Error while playing audio file: ", err)
+		return
+	}
+}
+
 func main() {
 	// Small test of reading audio file and sending it to AI companion API
 	// get ai-companion here		https://github.com/Hukasx0/ai-companion
@@ -78,15 +113,20 @@ func main() {
 	server := flag.String("a", "http://localhost", "address of the backend server")
 	flag.Parse()
 
-	speech := htgotts.Speech{Folder: "test", Language: "en"}
-
 	for {
 				// listen 24/7 for command "hey companion!"
 		call := strings.ToLower(get_voice_transcript(server, "5", "/tmp/hey.wav"))
 		if strings.Contains(call, "hey companion") {
 					// if user said command then listen for commands for ai-companion
-			speech.Speak("I'm listening...")
+			cmd := exec.Command("xdg-open", "sounds/listening.wav")
+			err_p := cmd.Run()
+			if err_p != nil {
+				fmt.Println("Error while playing audio file: ", err_p)
+				return
+			}
 			voice_message := get_voice_transcript(server, "8", "/tmp/out.wav")
+			reg := regexp.MustCompile(`\[.*?\]`)
+			voice_message = reg.ReplaceAllString(voice_message, "")
 			promptData := map[string]string{
 				"prompt": voice_message,
 			}
@@ -118,7 +158,8 @@ func main() {
 				fmt.Println("Error while JSON parsing: ", err3)
 				return
 			}
-			speech.Speak(promptStruct.Text)
+			tts(promptStruct.Text)
+			// speech.Speak(promptStruct.Text)
 		}
 	}
 }

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"regexp"
 	"net/url"
+	"path/filepath"
+	"github.com/agnivade/levenshtein"
 	// pacman -S mplayer
 )
 
@@ -74,9 +76,9 @@ func get_voice_transcript(server *string, seconds string, filePath string) strin
 	return string(responseBody)
 }
 
-func tts(text string) {
-	text = url.QueryEscape(text)
-	resp, err := http.Get("http://localhost:5002/api/tts?text="+text)
+func tts(server *string, text string) {
+	text = url.QueryEscape(strings.ReplaceAll(text, ">", ""))
+	resp, err := http.Get(*server+":5002/api/tts?text="+text)
 	if err != nil {
 		fmt.Println("Error while doing GET request:", err)
 		return
@@ -106,6 +108,47 @@ func tts(text string) {
 	}
 }
 
+func get_most_similiar(search string, data []string) string {
+	if len(data) == 0 {
+		return ""
+	}
+
+	minDistance := levenshtein.ComputeDistance(search, data[0])
+
+	mostSimilarElement := data[0]
+
+	for _, s := range data[1:] {
+		distance := levenshtein.ComputeDistance(search, s)
+		if distance < minDistance {
+			minDistance = distance
+			mostSimilarElement = s
+		}
+	}
+
+	return mostSimilarElement
+}
+
+func play_music_file(music_file_name string) {
+	files, err := ioutil.ReadDir("music")
+	if err != nil {
+		fmt.Println("Error while reading music folder: ", err)
+		return
+	}
+	var music_files []string
+	for _, file := range files {
+		name := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
+		extension := filepath.Ext(file.Name())
+		music_files = append(music_files, name+extension)
+	}
+	music_file := get_most_similiar(music_file_name, music_files)
+	cmd := exec.Command("xdg-open", "music/"+music_file)
+	err_p := cmd.Run()
+	if err_p != nil {
+		fmt.Println("Error while playing audio file: ", err_p)
+		return
+	}
+}
+
 func main() {
 	// Small test of reading audio file and sending it to AI companion API
 	// get ai-companion here		https://github.com/Hukasx0/ai-companion
@@ -127,39 +170,43 @@ func main() {
 			voice_message := get_voice_transcript(server, "8", "/tmp/out.wav")
 			reg := regexp.MustCompile(`\[.*?\]`)
 			voice_message = reg.ReplaceAllString(voice_message, "")
-			promptData := map[string]string{
-				"prompt": voice_message,
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(voice_message)), "play ") {
+				song_name := strings.TrimSpace(voice_message[len("play "):])
+				play_music_file(song_name)
+			} else {
+				promptData := map[string]string{
+					"prompt": voice_message,
+				}
+		
+				jsonPrompt, err := json.Marshal(promptData)
+				if err != nil {
+					fmt.Println("Error while JSON encoding: ", err)
+					return
+				}
+		
+				resp2, err := http.Post(*server+":3000"+"/api/prompt", "application/json", bytes.NewBuffer(jsonPrompt))
+				if err != nil {
+					fmt.Println("Error while sending POST request: ", err)
+					return
+				}
+				defer resp2.Body.Close()
+		
+				responseBody2, err2 := ioutil.ReadAll(resp2.Body)
+				if err2 != nil {
+					fmt.Println("Error while getting server response: ", err2)
+					return
+				}
+		
+				var promptStruct PromptResponse
+		
+				err3 := json.Unmarshal(responseBody2, &promptStruct)
+		
+				if err3 != nil {
+					fmt.Println("Error while JSON parsing: ", err3)
+					return
+				}
+				tts(server, promptStruct.Text)
 			}
-	
-			jsonPrompt, err := json.Marshal(promptData)
-			if err != nil {
-				fmt.Println("Error while JSON encoding: ", err)
-				return
-			}
-	
-			resp2, err := http.Post(*server+":3000"+"/api/prompt", "application/json", bytes.NewBuffer(jsonPrompt))
-			if err != nil {
-				fmt.Println("Error while sending POST request: ", err)
-				return
-			}
-			defer resp2.Body.Close()
-	
-			responseBody2, err2 := ioutil.ReadAll(resp2.Body)
-			if err2 != nil {
-				fmt.Println("Error while getting server response: ", err2)
-				return
-			}
-	
-			var promptStruct PromptResponse
-	
-			err3 := json.Unmarshal(responseBody2, &promptStruct)
-	
-			if err3 != nil {
-				fmt.Println("Error while JSON parsing: ", err3)
-				return
-			}
-			tts(promptStruct.Text)
-			// speech.Speak(promptStruct.Text)
 		}
 	}
 }

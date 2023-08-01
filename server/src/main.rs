@@ -28,7 +28,7 @@ async fn voice_transcript(mut received: actix_web::web::Payload) -> HttpResponse
             if let Ok(entry) = entry {
                 if let Some(file_name) = entry.file_name().to_str() {
                     if file_name.ends_with(".bin") {
-                        model_path = "models/".to_owned()+file_name;
+                        model_path = "models_voice/".to_owned()+file_name;
                         println!("loaded model models/{}", file_name);
                     }
                 }

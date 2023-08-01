@@ -1021,16 +1021,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "futures-util",
- "hound",
- "whisper-rs",
-]
-
-[[package]]
 name = "sha1"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1257,6 +1247,16 @@ dependencies = [
  "either",
  "libc",
  "once_cell",
+]
+
+[[package]]
+name = "whisper"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "futures-util",
+ "hound",
+ "whisper-rs",
 ]
 
 [[package]]

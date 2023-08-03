@@ -13,6 +13,7 @@ import (
 	"strings"
 	"regexp"
 	"net/url"
+	"time"
 	"path/filepath"
 	"github.com/agnivade/levenshtein"
 	// pacman -S mplayer
@@ -128,7 +129,7 @@ func get_most_similiar(search string, data []string) string {
 	return mostSimilarElement
 }
 
-func play_music_file(music_file_name string) {
+func play_music_file(server *string, music_file_name string) {
 	files, err := ioutil.ReadDir("music")
 	if err != nil {
 		fmt.Println("Error while reading music folder: ", err)
@@ -141,12 +142,51 @@ func play_music_file(music_file_name string) {
 		music_files = append(music_files, name+extension)
 	}
 	music_file := get_most_similiar(music_file_name, music_files)
+	tts(server, "now playing "+music_file)
 	cmd := exec.Command("xdg-open", "music/"+music_file)
 	err_p := cmd.Run()
 	if err_p != nil {
 		fmt.Println("Error while playing audio file: ", err_p)
 		return
 	}
+}
+
+type CurrentWeather struct {
+	Temperature float64 `json:"temperature"`
+}
+
+type ForecastData struct {
+	CurrentWeather CurrentWeather `json:"current_weather"`
+}
+
+func get_weather() string {
+	latitude := "52.2297"
+	longitude := "21.0122"
+	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current_weather=true", latitude, longitude)
+
+	response, err := http.Get(url)
+	if err != nil {
+		return "Error while doing get request to open-meteo.com:"
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusOK {
+		var data ForecastData
+		err := json.NewDecoder(response.Body).Decode(&data)
+		if err != nil {
+			return "Error while parsing json data from open-meteo.com"
+		}
+
+		temperature := data.CurrentWeather.Temperature
+		return fmt.Sprintf("Temperature in Poland, Warsaw is %.2f celsius", temperature)
+	} else {
+		return "Error while getting data from open-meteo.com"
+	}
+}
+
+func current_time() string {
+	currentTime := time.Now()
+	formattedTime := currentTime.Format("15:04")
+	return "current time is: "+formattedTime
 }
 
 func main() {
@@ -170,9 +210,14 @@ func main() {
 			voice_message := get_voice_transcript(server, "8", "/tmp/out.wav")
 			reg := regexp.MustCompile(`\[.*?\]`)
 			voice_message = reg.ReplaceAllString(voice_message, "")
-			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(voice_message)), "play ") {
+			said_words := strings.ToLower(strings.TrimSpace(voice_message))
+			if strings.HasPrefix(said_words, "play ") {
 				song_name := strings.TrimSpace(voice_message[len("play "):])
-				play_music_file(song_name)
+				play_music_file(server, song_name)
+			} else if strings.HasPrefix(said_words, "what's the temperature") {
+				tts(server, get_weather())
+			} else if strings.HasPrefix(said_words, "what time is it") {
+				tts(server, current_time())
 			} else {
 				promptData := map[string]string{
 					"prompt": voice_message,
